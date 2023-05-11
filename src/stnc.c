@@ -156,7 +156,7 @@ void start_server(char *port)
             else if (bytes_recv == 0)
             {
                 fprintf(stdout, "Client has disconnected. Closing chat.\n");
-                exit_handle(-1);
+                exit_handle(-2);
             }
             else
             {
