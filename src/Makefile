@@ -1,3 +1,7 @@
+# this file contains implementation for a Makefile to stnc
+# since: 11/05/2023
+# authors: Lior Vinman & Yoad Tamar 
+
 CC = gcc
 FLAGS = -Wall -g
 TARGETS = stnc
@@ -9,7 +13,7 @@ default: all
 all: $(TARGETS)
 
 stnc: stnc.c stnc.h
-	$(CC) $(FLAGS) -c $^
+	$(CC) $(FLAGS) -c $^ 
 	$(CC) $(FLAGS) -o $@ $@.o
 
 clean:
