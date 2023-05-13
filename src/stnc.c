@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    performance_server(argv[3], false);
+                    performance_server(argv[2], false);
                 }
             }
             else
@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    performance_server(argv[3], true);
+                    performance_server(argv[2], true);
                 }
             }
         }
