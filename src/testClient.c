@@ -13,27 +13,34 @@
 #include <sys/poll.h>
 #include <unistd.h>
 #include <math.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define MB_100 1024 * 1024 * 100
 
 void performance_client(char *ip, char *port, char *type, char *param)
 {
-
-    printf("type=%s,param=%s.\n", type, param);
-
     int client_sock = 0;
 
     socklen_t addr_size = 0, addr_size6 = 0;
 
+    size_t size = 0;
+ 
     ssize_t bytes_to_send = 0, bytes_sent = 0;
 
     struct sockaddr_in server_addr = {0};
-    memset(&server_addr, 0, addr_size);
+    memset(&server_addr, 0, sizeof(struct sockaddr_in));
 
     struct sockaddr_in6 server_addr6 = {0};
-    memset(&server_addr, 0, addr_size);
+    memset(&server_addr, 0, sizeof(struct sockaddr_in6));
 
     char *buffer = NULL;
+
+    struct stat stat = {0};
+    memset(&stat, 0, sizeof(struct stat));
+
+    void *ptr = NULL;
 
     client_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (client_sock <= 0)
@@ -241,7 +248,7 @@ void performance_client(char *ip, char *port, char *type, char *param)
         }
 
         addr_size6 = sizeof(struct sockaddr_in6);
-        server_addr6.sin6_family = AF_INET;
+        server_addr6.sin6_family = AF_INET6;
         if (inet_pton(AF_INET6, ip, &server_addr6.sin6_addr) < 0)
         {
             perror("inet_pton() failed");
@@ -269,6 +276,7 @@ void performance_client(char *ip, char *port, char *type, char *param)
 
         sleep(1);
 
+        bytes_sent = 0;
         bytes_sent = sendto(client_sock, "END", strlen("END") + 1, 0, (struct sockaddr *)&server_addr6, addr_size6);
         if (bytes_sent < 0)
         {
@@ -278,6 +286,54 @@ void performance_client(char *ip, char *port, char *type, char *param)
             buffer = NULL;
             exit(errno);
         }
+
+        close(client_sock);
+    }
+    else if(!strcmp(type, "uds") && !strcmp(param, "stream"))
+    {
+
+    }
+    else if(!strcmp(type, "uds") && !strcmp(param, "dgram"))
+    {
+        
+    }
+    else if(!strcmp(type, "pipe"))
+    {
+        
+    }
+    else if(!strcmp(type, "mmap"))
+    {
+        client_sock = open("shared_memory", O_RDONLY);
+        if(client_sock <= 0)
+        {
+            perror("send() failed");
+            free(buffer);
+            buffer = NULL;
+            exit(errno);
+        }
+
+        fstat(client_sock, &stat);
+        size = stat.st_size;
+
+        ptr = mmap(NULL, size, PROT_READ, MAP_SHARED, client_sock, 0);
+        if (ptr == MAP_FAILED)
+        {
+            perror("mmap() failed");
+            close(client_sock);
+            free(buffer);
+            buffer = NULL;
+            exit(errno);
+        }
+
+        fprintf(ptr , "%s" , buffer);
+        // if(bytes_to_send < 0)
+        // {
+        //     perror("read() failed");
+        //     close(client_sock);
+        //     free(buffer);
+        //     buffer = NULL;
+        //     exit(errno);
+        // }
 
         close(client_sock);
     }
