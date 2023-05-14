@@ -12,6 +12,9 @@
 #include <poll.h>
 #include <sys/poll.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define SO_REUSEPORT 15
 #define MB_100 1024 * 1024 * 100
@@ -30,16 +33,22 @@ void performance_server(char *port, bool qFlag)
     memset(type, 0, sizeof(param));
     memset(type, 0, sizeof(buffer));
 
+    size_t size = 0;
+
     ssize_t bytes_recv = 0;
 
-    struct timeval start = {0}, end = {0}, diff = {0};
+    struct timeval start = {0}, end = {0};
     memset(&start, 0, sizeof(start));
     memset(&end, 0, sizeof(end));
-    memset(&diff, 0, sizeof(diff));
 
     struct sockaddr_in6 server_addr6, client_addr6 = {0};
     memset(&server_sock, 0, sizeof(server_addr));
     memset(&client_sock, 0, sizeof(client_sock));
+
+    struct stat stat = {0};
+    memset(&stat, 0, sizeof(struct stat));
+
+    void *ptr = NULL;
 
     server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (server_sock <= 0)
@@ -188,8 +197,6 @@ void performance_server(char *port, bool qFlag)
         }
         close(client_sock);
         close(server_sock);
-
-        timersub(&diff, &end, &start);
     }
     else if (!strcmp(type, "ipv6") && !strcmp(param, "tcp"))
     {
@@ -259,8 +266,6 @@ void performance_server(char *port, bool qFlag)
         }
         close(client_sock);
         close(server_sock);
-
-        timersub(&diff, &end, &start);
     }
     else if (!strcmp(type, "ipv4") && !strcmp(param, "udp"))
     {
@@ -309,8 +314,7 @@ void performance_server(char *port, bool qFlag)
 
         close(server_sock);
 
-        timersub(&diff, &end, &start);
-        diff.tv_sec -= 1;
+        end.tv_sec -= 1;
     }
     else if (!strcmp(type, "ipv6") && !strcmp(param, "udp"))
     {
@@ -334,15 +338,25 @@ void performance_server(char *port, bool qFlag)
         server_addr6.sin6_addr = in6addr_any;
         server_addr6.sin6_port = htons(atoi(port));
 
+
+        if (bind(server_sock, (struct sockaddr *)&server_addr6, addr_size6) < 0)
+        {
+            perror("bind() failed");
+            close(server_sock);
+            exit(errno);
+        }
+
         gettimeofday(&start, NULL);
         bytes_recv = recvfrom(server_sock, buffer, sizeof(buffer), 0, NULL, NULL);
-        while (bytes_recv > 0)
+        while (strcmp(buffer, "END"))
         {
+            memset(buffer, 0, sizeof(buffer));
             bytes_recv = recvfrom(server_sock, buffer, sizeof(buffer), 0, NULL, NULL);
         }
         if (bytes_recv < 0)
         {
             perror("recv() failed");
+            close(client_sock);
             close(server_sock);
             exit(errno);
         }
@@ -350,7 +364,46 @@ void performance_server(char *port, bool qFlag)
 
         close(server_sock);
 
-        timersub(&diff, &end, &start);
+        end.tv_sec -= 1;
     }
-    fprintf(stdout, "%s_%s,%ld\n", type, param, (diff.tv_sec * 1000 + diff.tv_usec / 1000));
+    else if(!strcmp(type, "uds") && !strcmp(param, "stream"))
+    {
+
+    }
+    else if(!strcmp(type, "uds") && !strcmp(param, "dgram"))
+    {
+        
+    }
+    else if(!strcmp(type, "pipe"))
+    {
+        
+    }
+    else if(!strcmp(type, "mmap"))
+    {
+        sleep(2);
+        server_sock = open("shared_memory", O_RDWR | O_CREAT, 0666);
+        if(server_sock <= 0)
+        {
+            perror("open() failed");
+            exit(errno);
+        }
+
+        fstat(server_sock, &stat);
+        size = stat.st_size;
+
+        ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, server_sock, 0);
+        if (ptr == MAP_FAILED)
+        {
+            perror("mmap() failed");
+            close(server_sock);
+            exit(errno);
+        }
+
+        gettimeofday(&start, NULL);
+        memcpy(ptr, buffer, strlen(buffer) + 1);
+        gettimeofday(&end, NULL);
+
+        close(server_sock);
+    }
+    fprintf(stdout, "%s_%s,%ld\n", type, param, ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec)));
 }
